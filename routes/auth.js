@@ -11,8 +11,7 @@ const router = express.Router();
 
 router.post("/signup", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-
+    const { name, email, password } = req.body || {};
     // Validate name
     if (!name || typeof name !== "string" || name.trim().length < 2) {
       return res.status(400).json({
