@@ -1,8 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { checkDatabaseConnection } 
-from "./db.js";
+import {
+  checkDatabaseConnection,
+  initializeDatabase
+} from "./db.js";
 
 dotenv.config();
 
