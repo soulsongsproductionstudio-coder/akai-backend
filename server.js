@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { checkDatabaseConnection } 
+from "./db.js";
 
 dotenv.config();
 
@@ -107,6 +109,29 @@ app.post("/api/chat", (req, res) => {
     reply: "AKAI backend received your message. Real AI integration will be connected later.",
     received: message
   });
+});
+
+// --------------------------------------------------
+// Database health check
+// --------------------------------------------------
+
+app.get("/api/database/health", async (req, res) => {
+  try {
+    const result = await checkDatabaseConnection();
+
+    res.json({
+      success: true,
+      database: "connected",
+      timestamp: result.current_time
+    });
+  } catch (error) {
+    console.error("Database health check failed:", error);
+
+    res.status(500).json({
+      success: false,
+      database: "disconnected"
+    });
+  }
 });
 
 // --------------------------------------------------
