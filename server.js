@@ -6,6 +6,8 @@ import {
   initializeDatabase
 } from "./db.js";
 
+import authRoutes from "./routes/auth.js";
+
 dotenv.config();
 
 const app = express();
@@ -30,7 +32,11 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
+// --------------------------------------------------
+// Authentication routes
+// --------------------------------------------------
 
+app.use("/api/auth", authRoutes);
 // --------------------------------------------------
 // Basic request logging
 // --------------------------------------------------
