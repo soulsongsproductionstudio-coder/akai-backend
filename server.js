@@ -164,11 +164,24 @@ app.use((err, req, res, next) => {
 // Start server
 // --------------------------------------------------
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("====================================");
-  console.log("        AKAI BACKEND ONLINE");
-  console.log("====================================");
-  console.log(`Port: ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log("====================================");
-});
+async function startServer() {
+  try {
+    await initializeDatabase();
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log("====================================");
+      console.log("        AKAI BACKEND ONLINE");
+      console.log("====================================");
+      console.log(`Port: ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+      console.log("Database: Connected");
+      console.log("Users table: Ready");
+      console.log("====================================");
+    });
+  } catch (error) {
+    console.error("Failed to initialize database:", error);
+    process.exit(1);
+  }
+}
+
+startServer();
