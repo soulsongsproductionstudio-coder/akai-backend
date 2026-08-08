@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { query } from "../db.js";
+import { authenticateToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -207,6 +208,50 @@ router.post("/login", async (req, res) => {
     return res.status(500).json({
       success: false,
       error: "Unable to login."
+    });
+  }
+});
+// --------------------------------------------------
+// GET CURRENT USER
+// --------------------------------------------------
+
+router.get("/me", authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      `
+      SELECT id, name, email, created_at
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [req.user.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "User not found."
+      });
+    }
+
+    const user = result.rows[0];
+
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.created_at
+      }
+    });
+
+  } catch (error) {
+    console.error("Get current user error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Unable to retrieve user."
     });
   }
 });
