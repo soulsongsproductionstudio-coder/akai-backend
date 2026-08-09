@@ -8,6 +8,7 @@ import {
 
 import authRoutes from "./routes/auth.js";
 import { authenticateToken } from "./middleware/authMiddleware.js";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
