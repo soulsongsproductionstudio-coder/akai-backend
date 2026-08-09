@@ -7,6 +7,7 @@ import {
 } from "./db.js";
 
 import authRoutes from "./routes/auth.js";
+import { authenticateToken } from "./middleware/authMiddleware.js";
 
 dotenv.config();
 
@@ -102,7 +103,7 @@ app.get("/api/auth/status", (req, res) => {
 // Chat placeholder
 // --------------------------------------------------
 
-app.post("/api/chat", (req, res) => {
+app.post("/api/chat", authenticateToken, (req, res) => {
   const { message } = req.body;
 
   if (!message || typeof message !== "string") {
