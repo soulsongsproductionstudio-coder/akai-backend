@@ -104,21 +104,48 @@ app.get("/api/auth/status", (req, res) => {
 // Chat placeholder
 // --------------------------------------------------
 
-app.post("/api/chat", authenticateToken, (req, res) => {
-  const { message } = req.body;
+app.post("/api/chat", authenticateToken, async (req, res) => {
+  try {
+    const { message } = req.body || {};
 
-  if (!message || typeof message !== "string") {
-    return res.status(400).json({
+    if (!message || typeof message !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: "Message is required."
+      });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY is not configured.");
+
+      return res.status(500).json({
+        success: false,
+        error: "AI service is not configured."
+      });
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: message
+    });
+
+    return res.json({
+      success: true,
+      reply: response.text || "I couldn't generate a response."
+    });
+
+  } catch (error) {
+    console.error("Gemini API error:", error);
+
+    return res.status(500).json({
       success: false,
-      error: "Message is required."
+      error: "Unable to generate AI response."
     });
   }
-
-  res.json({
-    success: true,
-    reply: "AKAI backend received your message. Real AI integration will be connected later.",
-    received: message
-  });
 });
 
 // --------------------------------------------------
