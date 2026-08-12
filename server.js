@@ -104,7 +104,7 @@ app.get("/api/auth/status", (req, res) => {
 // Chat placeholder
 // --------------------------------------------------
 
-app.post("/api/chat", authenticateToken, async (req, res) => {
+app.post("/api/ai/chat", authenticateToken, async (req, res) => {
   try {
     const { message } = req.body || {};
 
