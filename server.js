@@ -168,7 +168,6 @@ You are an AI assistant, not a human.
     error: "AKAI AI is temporarily unavailable because the AI usage limit has been reached. Please try again later."
   });
 }
-});
 
 // --------------------------------------------------
 // Database health check
