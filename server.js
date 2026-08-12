@@ -170,11 +170,12 @@ You are an AI assistant, not a human.
   } catch (error) {
     console.error("Gemini API error:", error);
 
-    return res.status(500).json({
-      success: false,
-      error: "Unable to generate AI response."
-    });
-  }
+    if (error?.status === 429) {
+  return res.status(429).json({
+    success: false,
+    error: "AKAI AI is temporarily unavailable because the AI usage limit has been reached. Please try again later."
+  });
+}
 });
 
 // --------------------------------------------------
