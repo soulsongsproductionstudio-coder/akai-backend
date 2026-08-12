@@ -167,7 +167,7 @@ You are an AI assistant, not a human.
       reply: response.text || "I couldn't generate a response."
     });
 
-   }
+   
     if (error?.status === 429) {
   return res.status(429).json({
     success: false,
