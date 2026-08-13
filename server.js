@@ -552,7 +552,7 @@ app.post(
       // USER MESSAGE
       // ------------------------------------------------
 
-      const { message } = req.body || {};
+      const { message, conversationId } = req.body || {};
 
       if (
         !message ||
@@ -595,6 +595,37 @@ app.post(
         });
       }
 
+// ------------------------------------------------
+// CONVERSATION
+// ------------------------------------------------
+
+if (!conversationId) {
+  return res.status(400).json({
+    success: false,
+    error: "Conversation ID is required."
+  });
+}
+
+// Make sure this conversation belongs to the
+// authenticated user.
+const conversationResult = await query(
+  `
+  SELECT id
+  FROM conversations
+  WHERE id = $1
+    AND user_id = $2
+  LIMIT 1
+  `,
+  [conversationId, userId]
+);
+
+if (conversationResult.rows.length === 0) {
+  return res.status(404).json({
+    success: false,
+    error: "Conversation not found."
+  });
+}
+
       // ------------------------------------------------
       // AI RATE LIMIT
       // ------------------------------------------------
@@ -635,6 +666,30 @@ app.post(
       const ai = new GoogleGenAI({
         apiKey: process.env.GEMINI_API_KEY
       });
+    // ------------------------------------------------
+   // SAVE USER MESSAGE
+   // ------------------------------------------------
+
+await query(
+  `
+  INSERT INTO messages (
+    conversation_id,
+    role,
+    content
+  )
+  VALUES ($1, 'user', $2)
+  `,
+  [conversationId, trimmedMessage]
+);
+
+await query(
+  `
+  UPDATE conversations
+  SET updated_at = CURRENT_TIMESTAMP
+  WHERE id = $1
+  `,
+  [conversationId]
+);
 
       // ------------------------------------------------
       // ASK GEMINI
@@ -701,6 +756,30 @@ You are an AI assistant, not a human.
       const reply =
         response?.text ||
         "I couldn't generate a response.";
+    // ------------------------------------------------
+// SAVE ASSISTANT MESSAGE
+// ------------------------------------------------
+
+await query(
+  `
+  INSERT INTO messages (
+    conversation_id,
+    role,
+    content
+  )
+  VALUES ($1, 'assistant', $2)
+  `,
+  [conversationId, reply]
+);
+
+await query(
+  `
+  UPDATE conversations
+  SET updated_at = CURRENT_TIMESTAMP
+  WHERE id = $1
+  `,
+  [conversationId]
+);
 
       // ------------------------------------------------
       // SUCCESS
