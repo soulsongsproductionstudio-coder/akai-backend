@@ -4,7 +4,8 @@ import dotenv from "dotenv";
 
 import {
   checkDatabaseConnection,
-  initializeDatabase
+  initializeDatabase,
+  query
 } from "./db.js";
 
 import authRoutes from "./routes/auth.js";
@@ -195,7 +196,349 @@ app.get("/api/auth/status", (req, res) => {
     message: "Authentication is handled through JWT."
   });
 });
+// ==================================================
+// PERSISTENT CONVERSATIONS
+// ==================================================
 
+// --------------------------------------------------
+// CREATE CONVERSATION
+// --------------------------------------------------
+
+app.post(
+  "/api/conversations",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Invalid authentication session."
+        });
+      }
+
+      const title =
+        typeof req.body?.title === "string" &&
+        req.body.title.trim()
+          ? req.body.title.trim().slice(0, 200)
+          : "New conversation";
+
+      const result = await query(
+        `
+        INSERT INTO conversations (user_id, title)
+        VALUES ($1, $2)
+        RETURNING id, title, created_at, updated_at
+        `,
+        [userId, title]
+      );
+
+      return res.status(201).json({
+        success: true,
+        conversation: result.rows[0]
+      });
+
+    } catch (error) {
+      console.error(
+        "Create conversation error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        error: "Unable to create conversation."
+      });
+    }
+  }
+);
+
+// --------------------------------------------------
+// LIST USER CONVERSATIONS
+// --------------------------------------------------
+
+app.get(
+  "/api/conversations",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Invalid authentication session."
+        });
+      }
+
+      const result = await query(
+        `
+        SELECT
+          c.id,
+          c.title,
+          c.created_at,
+          c.updated_at,
+          COUNT(m.id)::int AS message_count
+        FROM conversations c
+        LEFT JOIN messages m
+          ON m.conversation_id = c.id
+        WHERE c.user_id = $1
+        GROUP BY
+          c.id,
+          c.title,
+          c.created_at,
+          c.updated_at
+        ORDER BY c.updated_at DESC
+        `,
+        [userId]
+      );
+
+      return res.json({
+        success: true,
+        conversations: result.rows
+      });
+
+    } catch (error) {
+      console.error(
+        "List conversations error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        error: "Unable to load conversations."
+      });
+    }
+  }
+);
+
+// --------------------------------------------------
+// GET CONVERSATION MESSAGES
+// --------------------------------------------------
+
+app.get(
+  "/api/conversations/:conversationId/messages",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      const { conversationId } = req.params;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Invalid authentication session."
+        });
+      }
+
+      const conversation = await query(
+        `
+        SELECT id, title, created_at, updated_at
+        FROM conversations
+        WHERE id = $1
+          AND user_id = $2
+        LIMIT 1
+        `,
+        [conversationId, userId]
+      );
+
+      if (conversation.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Conversation not found."
+        });
+      }
+
+      const messages = await query(
+        `
+        SELECT
+          id,
+          role,
+          content,
+          created_at
+        FROM messages
+        WHERE conversation_id = $1
+        ORDER BY created_at ASC
+        `,
+        [conversationId]
+      );
+
+      return res.json({
+        success: true,
+        conversation: conversation.rows[0],
+        messages: messages.rows
+      });
+
+    } catch (error) {
+      console.error(
+        "Get conversation messages error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        error: "Unable to load conversation."
+      });
+    }
+  }
+);
+
+// --------------------------------------------------
+// SAVE MESSAGE
+// --------------------------------------------------
+
+app.post(
+  "/api/conversations/:conversationId/messages",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      const { conversationId } = req.params;
+      const { role, content } = req.body || {};
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Invalid authentication session."
+        });
+      }
+
+      if (
+        role !== "user" &&
+        role !== "assistant"
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid message role."
+        });
+      }
+
+      if (
+        typeof content !== "string" ||
+        !content.trim()
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "Message content is required."
+        });
+      }
+
+      const conversation = await query(
+        `
+        SELECT id
+        FROM conversations
+        WHERE id = $1
+          AND user_id = $2
+        LIMIT 1
+        `,
+        [conversationId, userId]
+      );
+
+      if (conversation.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Conversation not found."
+        });
+      }
+
+      const messageResult = await query(
+        `
+        INSERT INTO messages (
+          conversation_id,
+          role,
+          content
+        )
+        VALUES ($1, $2, $3)
+        RETURNING id, role, content, created_at
+        `,
+        [
+          conversationId,
+          role,
+          content.trim()
+        ]
+      );
+
+      await query(
+        `
+        UPDATE conversations
+        SET updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        `,
+        [conversationId]
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: messageResult.rows[0]
+      });
+
+    } catch (error) {
+      console.error(
+        "Save message error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        error: "Unable to save message."
+      });
+    }
+  }
+);
+
+// --------------------------------------------------
+// DELETE CONVERSATION
+// --------------------------------------------------
+
+app.delete(
+  "/api/conversations/:conversationId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      const { conversationId } = req.params;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Invalid authentication session."
+        });
+      }
+
+      const result = await query(
+        `
+        DELETE FROM conversations
+        WHERE id = $1
+          AND user_id = $2
+        RETURNING id
+        `,
+        [conversationId, userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Conversation not found."
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Conversation deleted successfully."
+      });
+
+    } catch (error) {
+      console.error(
+        "Delete conversation error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        error: "Unable to delete conversation."
+      });
+    }
+  }
+);
 // ==================================================
 // AI CHAT
 // ==================================================
