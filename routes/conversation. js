@@ -1,0 +1,212 @@
+import express from "express";
+import { query } from "../db.js";
+import { authenticateToken } from "../middleware/authMiddleware.js";
+
+const router = express.Router();
+
+// ==================================================
+// GET ALL CONVERSATIONS FOR CURRENT USER
+// ==================================================
+
+router.get("/", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid authentication session."
+      });
+    }
+
+    const result = await query(
+      `
+      SELECT
+        id,
+        title,
+        created_at,
+        updated_at
+      FROM conversations
+      WHERE user_id = $1
+      ORDER BY updated_at DESC
+      `,
+      [userId]
+    );
+
+    return res.json({
+      success: true,
+      conversations: result.rows
+    });
+
+  } catch (error) {
+    console.error("Get conversations error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Unable to retrieve conversations."
+    });
+  }
+});
+
+// ==================================================
+// CREATE NEW CONVERSATION
+// ==================================================
+
+router.post("/", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    const { title } = req.body || {};
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid authentication session."
+      });
+    }
+
+    const conversationTitle =
+      typeof title === "string" && title.trim()
+        ? title.trim().slice(0, 200)
+        : "New conversation";
+
+    const result = await query(
+      `
+      INSERT INTO conversations (user_id, title)
+      VALUES ($1, $2)
+      RETURNING id, title, created_at, updated_at
+      `,
+      [userId, conversationTitle]
+    );
+
+    return res.status(201).json({
+      success: true,
+      conversation: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Create conversation error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Unable to create conversation."
+    });
+  }
+});
+
+// ==================================================
+// GET ONE CONVERSATION + MESSAGES
+// ==================================================
+
+router.get("/:conversationId", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    const { conversationId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid authentication session."
+      });
+    }
+
+    const conversationResult = await query(
+      `
+      SELECT
+        id,
+        title,
+        created_at,
+        updated_at
+      FROM conversations
+      WHERE id = $1
+        AND user_id = $2
+      LIMIT 1
+      `,
+      [conversationId, userId]
+    );
+
+    if (conversationResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Conversation not found."
+      });
+    }
+
+    const messagesResult = await query(
+      `
+      SELECT
+        id,
+        role,
+        content,
+        created_at
+      FROM messages
+      WHERE conversation_id = $1
+      ORDER BY created_at ASC
+      `,
+      [conversationId]
+    );
+
+    return res.json({
+      success: true,
+      conversation: conversationResult.rows[0],
+      messages: messagesResult.rows
+    });
+
+  } catch (error) {
+    console.error("Get conversation error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Unable to retrieve conversation."
+    });
+  }
+});
+
+// ==================================================
+// DELETE CONVERSATION
+// ==================================================
+
+router.delete("/:conversationId", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    const { conversationId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid authentication session."
+      });
+    }
+
+    const result = await query(
+      `
+      DELETE FROM conversations
+      WHERE id = $1
+        AND user_id = $2
+      RETURNING id
+      `,
+      [conversationId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Conversation not found."
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Conversation deleted successfully."
+    });
+
+  } catch (error) {
+    console.error("Delete conversation error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Unable to delete conversation."
+    });
+  }
+});
+
+export default router;
