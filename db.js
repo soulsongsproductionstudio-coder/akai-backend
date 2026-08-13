@@ -36,22 +36,16 @@ export async function query(text, params) {
 // Database connection test
 // --------------------------------------------------
 
-export async function checkDatabaseConnection() {
-  const result = await pool.query("SELECT NOW() AS current_time");
-  return result.rows[0];
-}
-
-// --------------------------------------------------
-// Initialize database
-// --------------------------------------------------
-
 export async function initializeDatabase() {
   // Enable UUID generation
   await pool.query(`
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
   `);
 
-  // Create users table
+  // --------------------------------------------------
+  // USERS
+  // --------------------------------------------------
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -70,7 +64,86 @@ export async function initializeDatabase() {
     );
   `);
 
+  // --------------------------------------------------
+  // CONVERSATIONS
+  // --------------------------------------------------
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+      user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+      title VARCHAR(200)
+        DEFAULT 'New conversation',
+
+      created_at TIMESTAMP WITH TIME ZONE
+        DEFAULT CURRENT_TIMESTAMP,
+
+      updated_at TIMESTAMP WITH TIME ZONE
+        DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // --------------------------------------------------
+  // MESSAGES
+  // --------------------------------------------------
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+      conversation_id UUID NOT NULL
+        REFERENCES conversations(id)
+        ON DELETE CASCADE,
+
+      role VARCHAR(20) NOT NULL
+        CHECK (role IN ('user', 'assistant')),
+
+      content TEXT NOT NULL,
+
+      created_at TIMESTAMP WITH TIME ZONE
+        DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // --------------------------------------------------
+  // INDEXES
+  // --------------------------------------------------
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_conversations_user_id
+    ON conversations(user_id);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_conversations_updated_at
+    ON conversations(updated_at DESC);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
+    ON messages(conversation_id);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_messages_created_at
+    ON messages(created_at);
+  `);
+
   console.log("Users table is ready.");
+  console.log("Conversations table is ready.");
+  console.log("Messages table is ready.");
 }
 
-export default pool;
+export async function checkDatabaseConnection() {
+  const result = await pool.query("SELECT NOW() AS current_time");
+  return result.rows[0];
+}
+
+// --------------------------------------------------
+// Initialize database
+// --------------------------------------------------
+
